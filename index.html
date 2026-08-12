@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spaced Repetition Topic Tracker</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --text: #f8fafc;
+      --text-sub: #94a3b8;
+      --success: #22c55e;
+      --warning: #eab308;
+      --danger: #ef4444;
+      --border: #334155;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); min-height: 100vh; padding: 1.5rem; }
+    .container { max-width: 800px; margin: 0 auto; }
+
+    nav { display: flex; gap: 10px; margin-bottom: 1.5rem; }
+    nav button { flex: 1; padding: 12px; border: none; background: var(--card-bg); color: var(--text); font-weight: 600; border-radius: 8px; cursor: pointer; border: 1px solid var(--border); }
+    nav button.active { background: var(--accent); border-color: var(--accent); }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .stat-card { background: var(--card-bg); padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border); text-align: center; }
+    .stat-card h3 { font-size: 0.9rem; color: var(--text-sub); margin-bottom: 0.5rem; }
+    .stat-card p { font-size: 2rem; font-weight: bold; }
+
+    .btn-main { display: block; width: 100%; padding: 14px; background: var(--accent); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; margin-bottom: 2rem; }
+    .btn-main:hover { background: var(--accent-hover); }
+
+    .section-title { font-size: 1.2rem; margin-bottom: 1rem; color: var(--text); border-bottom: 2px solid var(--border); padding-bottom: 0.5rem; }
+    .topic-list { display: grid; gap: 1rem; margin-bottom: 2rem; }
+    .topic-card { background: var(--card-bg); padding: 1rem 1.25rem; border-radius: 8px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .topic-info h4 { font-size: 1.1rem; color: var(--text); margin-bottom: 4px; }
+    .topic-info p { font-size: 0.85rem; color: var(--text-sub); margin-bottom: 4px; }
+    .topic-info .badge { display: inline-block; padding: 2px 8px; font-size: 0.75rem; border-radius: 12px; background: var(--border); color: var(--text-sub); }
+
+    .btn-action { padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
+    .btn-revise { background: var(--success); color: white; }
+    .btn-delete { background: var(--danger); color: white; margin-left: 8px; }
+
+    .modal-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; padding: 1rem; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: var(--card-bg); padding: 1.5rem; border-radius: 10px; width: 100%; max-width: 450px; border: 1px solid var(--border); }
+    .modal h3 { margin-bottom: 1rem; }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; font-size: 0.85rem; color: var(--text-sub); margin-bottom: 0.3rem; }
+    .form-group input, .form-group textarea { width: 100%; padding: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <nav>
+    <button id="nav-dashboard" class="active" onclick="switchTab('dashboard')">Dashboard</button>
+    <button id="nav-topics" onclick="switchTab('topics')">All Topics</button>
+  </nav>
+
+  <!-- TAB 1: DASHBOARD -->
+  <div id="tab-dashboard" class="tab-content active">
+    <div class="stats-grid">
+      <div class="stat-card"><h3>Active Topics</h3><p id="cnt-active">0</p></div>
+      <div class="stat-card"><h3>Pending Topics</h3><p id="cnt-pending" style="color: var(--warning)">0</p></div>
+      <div class="stat-card"><h3>Mastered Topics</h3><p id="cnt-mastered" style="color: var(--success)">0</p></div>
+    </div>
+
+    <button class="btn-main" onclick="openModal()">+ Add New Topic</button>
+
+    <h2 class="section-title">Pending Revision</h2>
+    <div id="pending-list" class="topic-list"></div>
+
+    <h2 class="section-title">Mastered Topics (Level 5 Completed)</h2>
+    <div id="mastered-list" class="topic-list"></div>
+  </div>
+
+  <!-- TAB 2: ALL TOPICS -->
+  <div id="tab-topics" class="tab-content">
+    <h2 class="section-title">All Active & Pending Topics</h2>
+    <div id="all-topics-list" class="topic-list"></div>
+  </div>
+</div>
+
+<!-- ADD TOPIC OVERLAY -->
+<div id="modal" class="modal-overlay">
+  <div class="modal">
+    <h3>Add New Topic</h3>
+    <form id="topic-form" onsubmit="handleCreateTopic(event)">
+      <div class="form-group">
+        <label>Topic Name</label>
+        <input type="text" id="inp-name" required>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="inp-desc" rows="3" required></textarea>
+      </div>
+      <div class="form-group">
+        <label>File Name / Path</label>
+        <input type="text" id="inp-file" placeholder="e.g. notes_ch1.pdf" required>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-action" style="background: var(--border); color: white;" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn-action btn-revise">Finish</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- FIREBASE SDKs -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  // TODO: Replace with your Firebase Configuration object
+  const firebaseConfig = {
+    apiKey: "AIzaSy...",
+    authDomain: "your-project.firebaseapp.com",
+    projectId: "your-project",
+    storageBucket: "your-project.appspot.com",
+    messagingSenderId: "123456789",
+    appId: "1:123456789:web:abc123..."
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  let topics = [];
+
+  // Spaced Repetition Logic Intervals in Days
+  const INTERVALS = { 1: 1, 2: 7, 3: 30, 4: 180 };
+
+  async function loadTopics() {
+    const querySnapshot = await getDocs(collection(db, "topics"));
+    topics = [];
+    querySnapshot.forEach((d) => {
+      topics.push({ id: d.id, ...d.data() });
+    });
+    render();
+  }
+
+  window.handleCreateTopic = async function(e) {
+    e.preventDefault();
+    const newTopic = {
+      name: document.getElementById('inp-name').value,
+      description: document.getElementById('inp-desc').value,
+      fileName: document.getElementById('inp-file').value,
+      level: 1,
+      createdAt: new Date().toISOString(),
+      nextReviewDate: getNextDate(1).toISOString(),
+      isMastered: false
+    };
+
+    await addDoc(collection(db, "topics"), newTopic);
+    closeModal();
+    document.getElementById('topic-form').reset();
+    loadTopics();
+  };
+
+  window.markRevised = async function(id, currentLevel) {
+    const nextLvl = currentLevel + 1;
+    let updateData = {};
+
+    if (nextLvl > 5) {
+      updateData = { isMastered: true, level: 5 };
+    } else {
+      updateData = {
+        level: nextLvl,
+        nextReviewDate: getNextDate(nextLvl).toISOString()
+      };
+    }
+
+    await updateDoc(doc(db, "topics", id), updateData);
+    loadTopics();
+  };
+
+  window.deleteTopic = async function(id) {
+    if (confirm("Are you sure you want to delete this topic?")) {
+      await deleteDoc(doc(db, "topics", id));
+      loadTopics();
+    }
+  };
+
+  function getNextDate(level) {
+    const now = new Date();
+    const daysToAdd = INTERVALS[level] || 1;
+    now.setDate(now.getDate() + daysToAdd);
+    return now;
+  }
+
+  function isPending(topic) {
+    if (topic.isMastered) return false;
+    return new Date() >= new Date(topic.nextReviewDate);
+  }
+
+  function render() {
+    const now = new Date();
+    const active = topics.filter(t => !t.isMastered);
+    const pending = active.filter(t => isPending(t));
+    const mastered = topics.filter(t => t.isMastered);
+
+    document.getElementById('cnt-active').innerText = active.length;
+    document.getElementById('cnt-pending').innerText = pending.length;
+    document.getElementById('cnt-mastered').innerText = mastered.length;
+
+    // Render Pending List
+    const pendingListEl = document.getElementById('pending-list');
+    pendingListEl.innerHTML = pending.length === 0 ? '<p style="color:var(--text-sub)">No pending topics for today!</p>' : '';
+    pending.forEach(t => {
+      pendingListEl.innerHTML += `
+        <div class="topic-card">
+          <div class="topic-info">
+            <h4>${t.name}</h4>
+            <p>${t.description} | 📄 ${t.fileName}</p>
+            <span class="badge">Level ${t.level}</span>
+          </div>
+          <button class="btn-action btn-revise" onclick="markRevised('${t.id}', ${t.level})">Mark Revised</button>
+        </div>`;
+    });
+
+    // Render Mastered List
+    const masteredListEl = document.getElementById('mastered-list');
+    masteredListEl.innerHTML = mastered.length === 0 ? '<p style="color:var(--text-sub)">No mastered topics yet.</p>' : '';
+    mastered.forEach(t => {
+      masteredListEl.innerHTML += `
+        <div class="topic-card">
+          <div class="topic-info">
+            <h4>${t.name}</h4>
+            <p>${t.description} | 📄 ${t.fileName}</p>
+            <span class="badge" style="background:var(--success); color:white;">Mastered</span>
+          </div>
+        </div>`;
+    });
+
+    // Render All Active & Pending List (Tab 2)
+    const allListEl = document.getElementById('all-topics-list');
+    allListEl.innerHTML = active.length === 0 ? '<p style="color:var(--text-sub)">No active topics found.</p>' : '';
+    active.forEach(t => {
+      const pendingStatus = isPending(t) ? ' (Pending)' : '';
+      allListEl.innerHTML += `
+        <div class="topic-card">
+          <div class="topic-info">
+            <h4>${t.name}${pendingStatus}</h4>
+            <p>${t.description} | 📄 ${t.fileName}</p>
+            <span class="badge">Level ${t.level}</span>
+          </div>
+          <button class="btn-action btn-delete" onclick="deleteTopic('${t.id}')">Delete</button>
+        </div>`;
+    });
+  }
+
+  window.switchTab = function(tab) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
+    document.getElementById(`tab-${tab}`).classList.add('active');
+    document.getElementById(`nav-${tab}`).classList.add('active');
+  };
+
+  window.openModal = () => document.getElementById('modal').classList.add('active');
+  window.closeModal = () => document.getElementById('modal').classList.remove('active');
+
+  loadTopics();
+</script>
+</body>
+</html>
